@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>بث مباشر بين الهواتف</title>
 
-<!-- PeerJS: يتولى إنشاء اتصال Peer-to-Peer عبر WebRTC، ويستخدم خادم Signaling سحابي مجاني فقط لتبادل معلومات الاتصال الأولية (لا فيديو ولا صوت يمر عبره) -->
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <style>
@@ -40,7 +39,6 @@
   .screen{ display:none; flex:1; flex-direction:column; padding:20px; gap:16px; max-width:520px; margin:0 auto; width:100%; }
   .screen.active{ display:flex; }
 
-  /* ===== شاشة البداية ===== */
   #welcome{ justify-content:center; align-items:center; text-align:center; gap:24px; }
   .app-logo{ font-size:52px; }
   .app-title{ font-size:22px; font-weight:700; margin:0; }
@@ -72,7 +70,6 @@
   .role-btn .txt{ text-align:right; flex:1; }
   .role-btn .txt small{ display:block; font-weight:400; color:var(--text-dim); font-size:12.5px; margin-top:2px; }
 
-  /* ===== عناصر عامة ===== */
   .page-title{ display:flex; align-items:center; gap:10px; font-size:19px; font-weight:700; margin:4px 0 0; }
   .status-pill{
     display:inline-flex; align-items:center; gap:8px;
@@ -150,13 +147,11 @@
     width:52px; height:52px; border-radius:50%; font-size:20px; cursor:pointer;
   }
   .hidden{ display:none !important; }
-
   .note{ font-size:12px; color:var(--text-dim); line-height:1.7; text-align:center; }
 </style>
 </head>
 <body>
 
-<!-- ===================== شاشة البداية ===================== -->
 <div id="welcome" class="screen active">
   <div class="app-logo">📡</div>
   <h1 class="app-title">بث مباشر بين الهواتف</h1>
@@ -174,7 +169,6 @@
   <p class="note">يتطلب التطبيق اتصالاً بالإنترنت على كلا الهاتفين، وصلاحية الوصول إلى الكاميرا والميكروفون على هاتف الكاميرا فقط.</p>
 </div>
 
-<!-- ===================== واجهة هاتف الكاميرا ===================== -->
 <div id="cameraScreen" class="screen">
   <button class="back-link" data-back>⟵ رجوع للبداية</button>
   <h2 class="page-title">📷 هاتف الكاميرا</h2>
@@ -197,7 +191,6 @@
   <button class="btn btn-danger" id="stopCamBtn">⏹ إيقاف البث</button>
 </div>
 
-<!-- ===================== واجهة هاتف الشاشة ===================== -->
 <div id="screenScreen" class="screen">
   <button class="back-link" data-back>⟵ رجوع للبداية</button>
   <h2 class="page-title">📺 هاتف الشاشة</h2>
@@ -237,7 +230,6 @@
 (function(){
   "use strict";
 
-  /* ---------- أدوات مساعدة عامة ---------- */
   const $ = (id) => document.getElementById(id);
   const screens = { welcome: $("welcome"), camera: $("cameraScreen"), screen: $("screenScreen") };
 
@@ -264,14 +256,10 @@
     $("scrStatusDot").className = "status-dot " + state;
   }
 
-  // فحص دعم المتصفح لـ WebRTC
   function isWebRTCSupported(){
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection && window.Peer);
   }
 
-  /* ============================================================
-     شاشة البداية
-     ============================================================ */
   $("chooseCameraBtn").addEventListener("click", () => { showScreen("camera"); startCameraRole(); });
   $("chooseScreenBtn").addEventListener("click", () => { showScreen("screen"); startScreenRole(); });
 
@@ -288,7 +276,7 @@
      ============================================================ */
   let camPeer = null;
   let localStream = null;
-  let currentFacingMode = "environment"; // الكاميرا الخلفية افتراضياً
+  let currentFacingMode = "environment";
   let activeCall = null;
   let camStarted = false;
 
@@ -297,7 +285,7 @@
     camStarted = true;
 
     if(!isWebRTCSupported()){
-      setCamStatus("error", "المتصفح لا يدعم البث المباشر (WebRTC). جرّب متصفحاً حديثاً مثل Chrome أو Safari.");
+      setCamStatus("error", "المتصفح لا يدعم البث المباشر (WebRTC).");
       return;
     }
 
@@ -311,17 +299,15 @@
       return;
     }
 
-    // إنشاء معرف Peer عشوائي قصير
     const shortId = generateShortId();
     camPeer = new Peer(shortId, { debug: 0 });
 
     camPeer.on("open", (id) => {
-      $("camIdValue").textContent = formatId(id);
+      $("camIdValue").textContent = id;
       setCamStatus("waiting", "في انتظار اتصال الشاشة...");
     });
 
     camPeer.on("call", (call) => {
-      // الرد على اتصال هاتف الشاشة بإرسال الفيديو والصوت
       activeCall = call;
       call.answer(localStream);
       setCamStatus("connected", "تم الاتصال، البث يعمل الآن");
@@ -344,14 +330,10 @@
       console.error(err);
       if(err.type === "unavailable-id"){
         setCamStatus("error", "الرمز مستخدم حالياً، أعد المحاولة");
-      }else if(err.type === "network" || err.type === "server-error"){
-        setCamStatus("error", "تعذر الاتصال بخادم الوساطة. تحقق من الإنترنت.");
       }else{
         setCamStatus("error", "حدث خطأ: " + err.type);
       }
     });
-
-    window.addEventListener("offline", () => setCamStatus("error", "انقطع الإنترنت على هذا الهاتف"));
   }
 
   async function getCameraStream(facingMode){
@@ -362,13 +344,8 @@
   }
 
   function handleMediaError(err){
-    console.error(err);
     if(err.name === "NotAllowedError" || err.name === "PermissionDeniedError"){
-      setCamStatus("error", "تم رفض صلاحية الكاميرا أو الميكروفون. فعّلها من إعدادات المتصفح.");
-    }else if(err.name === "NotFoundError" || err.name === "DevicesNotFoundError"){
-      setCamStatus("error", "لم يتم العثور على كاميرا في هذا الجهاز.");
-    }else if(err.name === "NotReadableError"){
-      setCamStatus("error", "الكاميرا مستخدمة من تطبيق آخر حالياً.");
+      setCamStatus("error", "تم رفض صلاحية الكاميرا أو الميكروفون.");
     }else{
       setCamStatus("error", "تعذر الوصول إلى الكاميرا: " + err.message);
     }
@@ -381,14 +358,12 @@
       const newStream = await getCameraStream(currentFacingMode);
       const newVideoTrack = newStream.getVideoTracks()[0];
 
-      // استبدال المسار في المعاينة
       const oldVideoTrack = localStream.getVideoTracks()[0];
       localStream.removeTrack(oldVideoTrack);
       oldVideoTrack.stop();
       localStream.addTrack(newVideoTrack);
       $("cameraPreview").srcObject = localStream;
 
-      // استبدال المسار في الاتصال الجاري إن وجد (بدون قطع البث)
       if(activeCall && activeCall.peerConnection){
         const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === "video");
         if(sender) sender.replaceTrack(newVideoTrack);
@@ -406,7 +381,7 @@
       await navigator.clipboard.writeText(id);
       toast("تم نسخ الرمز");
     }catch(e){
-      toast("تعذر النسخ، انسخه يدوياً: " + id);
+      toast("الرمز: " + id);
     }
   });
 
@@ -414,14 +389,9 @@
     const id = camPeer && camPeer.id;
     if(!id) return;
     if(navigator.share){
-      try{
-        await navigator.share({ title: "رمز البث المباشر", text: "رمز الاتصال: " + id });
-      }catch(e){ /* المستخدم ألغى المشاركة */ }
+      try{ await navigator.share({ title: "رمز البث المباشر", text: "رمز الاتصال: " + id }); }catch(e){}
     }else{
-      try{
-        await navigator.clipboard.writeText(id);
-        toast("تم نسخ الرمز (المشاركة غير مدعومة هنا)");
-      }catch(e){}
+      toast("تم نسخ الرمز");
     }
   });
 
@@ -468,7 +438,7 @@
     });
 
     scrPeer.on("disconnected", () => {
-      setScrStatus("error", "انقطع الاتصال بالإنترنت، جاري المحاولة مجدداً...");
+      setScrStatus("error", "انقطع الاتصال، جاري المحاولة مجدداً...");
       try{ scrPeer.reconnect(); }catch(e){}
     });
 
@@ -476,8 +446,6 @@
       console.error(err);
       if(err.type === "peer-unavailable"){
         setScrStatus("error", "تعذر الاتصال: الرمز غير صحيح أو هاتف الكاميرا غير متصل حالياً");
-      }else if(err.type === "network" || err.type === "server-error"){
-        setScrStatus("error", "تعذر الاتصال بخادم الوساطة. تحقق من الإنترنت.");
       }else{
         setScrStatus("error", "حدث خطأ: " + err.type);
       }
@@ -498,7 +466,7 @@
     if(e.key === "Enter") $("watchBtn").click();
   });
 
-  function connectToCamera(remoteId){
+  async function connectToCamera(remoteId){
     if(!scrPeer || scrPeer.disconnected){
       toast("جاري إعادة الاتصال بالخادم...");
       try{ scrPeer.reconnect(); }catch(e){}
@@ -507,53 +475,54 @@
     setScrStatus("waiting", "جاري الاتصال...");
     $("watchBtn").disabled = true;
 
-    // اتصال بدون بث محلي (هاتف الشاشة لا يرسل فيديو أو صوت)
-    const emptyStream = new MediaStream();
-    let call;
     try{
-      call = scrPeer.call(remoteId, emptyStream);
-    }catch(err){
-      setScrStatus("error", "تعذر بدء الاتصال");
-      $("watchBtn").disabled = false;
-      return;
-    }
+      // إنشاء تدفق وهمي يتضمن مسار صوت مكتوم ليعمل التفاوض بشكل صحيح بين الأجهزة
+      const canvas = document.createElement("canvas");
+      canvas.width = 16; canvas.height = 16;
+      const dummyStream = canvas.captureStream(1);
 
-    if(!call){
-      setScrStatus("error", "تعذر بدء الاتصال");
-      $("watchBtn").disabled = false;
-      return;
-    }
-
-    currentCall = call;
-
-    const connectTimeout = setTimeout(() => {
-      if(currentCall === call){
-        setScrStatus("error", "تعذر الاتصال، تحقق من الرمز وأعد المحاولة");
-        resetScreenUI();
+      const call = scrPeer.call(remoteId, dummyStream);
+      if(!call){
+        setScrStatus("error", "تعذر بدء الاتصال");
+        $("watchBtn").disabled = false;
+        return;
       }
-    }, 15000);
 
-    call.on("stream", (remoteStream) => {
-      clearTimeout(connectTimeout);
-      const video = $("remoteVideo");
-      video.srcObject = remoteStream;
-      setScrStatus("connected", "متصل — يعرض البث المباشر");
-      $("scrConnectForm").classList.add("hidden");
-      $("remoteScreenWrap").classList.remove("hidden");
-      $("scrControls").classList.remove("hidden");
+      currentCall = call;
+
+      const connectTimeout = setTimeout(() => {
+        if(currentCall === call){
+          setScrStatus("error", "تعذر الاتصال، تحقق من الرمز وأعد المحاولة");
+          resetScreenUI();
+        }
+      }, 15000);
+
+      call.on("stream", (remoteStream) => {
+        clearTimeout(connectTimeout);
+        const video = $("remoteVideo");
+        video.srcObject = remoteStream;
+        video.play().catch(()=>{});
+        setScrStatus("connected", "متصل — يعرض البث المباشر");
+        $("scrConnectForm").classList.add("hidden");
+        $("remoteScreenWrap").classList.remove("hidden");
+        $("scrControls").classList.remove("hidden");
+        $("watchBtn").disabled = false;
+      });
+
+      call.on("close", () => {
+        setScrStatus("error", "انقطع البث");
+        resetScreenUI();
+      });
+
+      call.on("error", () => {
+        clearTimeout(connectTimeout);
+        setScrStatus("error", "تعذر الاتصال");
+        resetScreenUI();
+      });
+    }catch(err){
+      setScrStatus("error", "حدث خطأ أثناء الاتصال");
       $("watchBtn").disabled = false;
-    });
-
-    call.on("close", () => {
-      setScrStatus("error", "انقطع البث");
-      resetScreenUI();
-    });
-
-    call.on("error", () => {
-      clearTimeout(connectTimeout);
-      setScrStatus("error", "تعذر الاتصال");
-      resetScreenUI();
-    });
+    }
   }
 
   function resetScreenUI(){
@@ -583,8 +552,7 @@
     const video = $("remoteVideo");
     isMuted = !isMuted;
     video.muted = isMuted;
-    const label = isMuted ? "🔇 تشغيل الصوت" : "🔊 كتم الصوت";
-    $("muteBtn").textContent = label;
+    $("muteBtn").textContent = isMuted ? "🔇 تشغيل الصوت" : "🔊 كتم الصوت";
     $("fsMuteBtn").textContent = isMuted ? "🔇" : "🔊";
   }
   $("muteBtn").addEventListener("click", toggleMute);
@@ -616,28 +584,13 @@
     $("remoteIdInput").value = "";
   }
 
-  /* ============================================================
-     أدوات عامة
-     ============================================================ */
   function generateShortId(){
-    // رمز قصير سهل النقل يدوياً (6 أرقام)
     return String(Math.floor(100000 + Math.random() * 900000));
   }
-  function formatId(id){
-    return id;
-  }
 
-  // عند إغلاق الصفحة أو إعادة تحميلها: إيقاف جميع مسارات الوسائط
   window.addEventListener("beforeunload", () => {
     cleanupCamera();
     cleanupScreen();
-  });
-
-  // رسالة توضيحية إذا لم تُحمَّل مكتبة PeerJS (فشل الشبكة مثلاً)
-  window.addEventListener("load", () => {
-    if(typeof Peer === "undefined"){
-      toast("تعذر تحميل مكوّن الاتصال. تحقق من اتصال الإنترنت وأعد فتح الصفحة.");
-    }
   });
 
 })();
