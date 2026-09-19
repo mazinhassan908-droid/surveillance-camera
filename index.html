@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بث كاميرا من هاتف لآخر</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #1a1a1a;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      width: 100%;
+      max-width: 500px;
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    h2 { margin-bottom: 15px; color: #00d2ff; }
+    .mode-btn {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { background-color: #555; }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #333;
+      color: #fff;
+      text-align: center;
+      font-size: 16px;
+    }
+    video {
+      width: 100%;
+      max-height: 60vh;
+      border-radius: 8px;
+      background-color: #000;
+      object-fit: cover;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #aaa;
+    }
+    .hidden { display: none; }
+  </style>
+  <!-- استدعاء مكتبة PeerJS -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+  <!-- اختيار نوع الجهاز -->
+  <div class="container" id="selection-screen">
+    <h2>اختر دور هذا الهاتف</h2>
+    <div class="mode-btn">
+      <button onclick="selectRole('camera')">📷 هاتف الكاميرا</button>
+      <button onclick="selectRole('screen')">📺 هاتف الشاشة</button>
+    </div>
+  </div>
+
+  <!-- واجهة هاتف الكاميرا -->
+  <div class="container hidden" id="camera-screen">
+    <h2>📷 هاتف الكاميرا</h2>
+    <p>رمز هذا الهاتف (ID):</p>
+    <h1 id="camera-id" style="color: #00ff88; margin: 10px 0;">جاري التحميل...</h1>
+    <video id="local-video" autoplay playsinline muted></video>
+    <p class="status" id="camera-status">في انتظار اتصال الشاشة...</p>
+  </div>
+
+  <!-- واجهة هاتف الشاشة -->
+  <div class="container hidden" id="viewer-screen">
+    <h2>📺 هاتف الشاشة</h2>
+    <input type="text" id="target-id-input" placeholder="أدخل رمز هاتف الكاميرا">
+    <button onclick="connectToCamera()">عرض البث الحي</button>
+    <br><br>
+    <video id="remote-video" autoplay playsinline controls></video>
+    <p class="status" id="viewer-status">جاهز للاتصال...</p>
+  </div>
+
+  <script>
+    let peer = null;
+    let localStream = null;
+
+    function selectRole(role) {
+      document.getElementById('selection-screen').classList.add('hidden');
+
+      if (role === 'camera') {
+        document.getElementById('camera-screen').classList.remove('hidden');
+        initCamera();
+      } else {
+        document.getElementById('viewer-screen').classList.remove('hidden');
+        initViewer();
+      }
+    }
+
+    // --- إعدادات هاتف الكاميرا ---
+    async function initCamera() {
+      peer = new Peer();
+
+      peer.on('open', (id) => {
+        document.getElementById('camera-id').innerText = id;
+      });
+
+      try {
+        // تشغيل الكاميرا الصوت والفيديو (يمكنك تحديد الكاميرا الخلفية باستخدام facingMode)
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }, // "environment" للكاميرا الخلفية، "user" للحديثة
+          audio: true
+        });
+
+        const videoElem = document.getElementById('local-video');
+        videoElem.srcObject = localStream;
+
+        // عند استقبال اتصال من هاتف الشاشة، يتم إرسال فيديو الكاميرا
+        peer.on('call', (call) => {
+          call.answer(localStream);
+          document.getElementById('camera-status').innerText = "تم الاتصال! يتم البث الآن...";
+        });
+
+      } catch (err) {
+        alert("تعذر الوصول إلى الكاميرا: " + err.message);
+      }
+    }
+
+    // --- إعدادات هاتف الشاشة ---
+    function initViewer() {
+      peer = new Peer();
+    }
+
+    function connectToCamera() {
+      const targetId = document.getElementById('target-id-input').value.trim();
+      const statusText = document.getElementById('viewer-status');
+
+      if (!targetId) {
+        alert("يرجى إدخال رمز الكاميرا أولاً!");
+        return;
+      }
+
+      statusText.innerText = "جاري الاتصال بالنقال...";
+
+      // إجراء المكالمة بدون إرسال فيديو من الشاشة
+      const call = peer.call(targetId, null);
+
+      call.on('stream', (remoteStream) => {
+        statusText.innerText = "متصل! يعرض البث المباشر الآن.";
+        const remoteVideo = document.getElementById('remote-video');
+        remoteVideo.srcObject = remoteStream;
+      });
+
+      call.on('error', (err) => {
+        statusText.innerText = "حدث خطأ أثناء الاتصال.";
+        console.error(err);
+      });
+    }
+  </script>
+</body>
+</html>
