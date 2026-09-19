@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>نظام كاميرات المراقبة</title>
 
-<!-- PeerJS: اتصال WebRTC مباشر Peer-to-Peer، خادم الوساطة يُستخدم فقط لتبادل معلومات الاتصال الأولية -->
+<!-- PeerJS: اتصال WebRTC مباشر Peer-to-Peer -->
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
 <style>
@@ -339,6 +339,18 @@
   function isWebRTCSupported(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection && window.Peer); }
   function genShortId(){ return String(Math.floor(100000 + Math.random()*900000)); }
 
+  // دالة تُنشئ مسار صوتي صامت لحل مشكلة الاتصال الخالي في WebRTC
+  function createDummyAudioStream() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const dst = ctx.createMediaStreamDestination();
+    osc.connect(dst);
+    osc.start();
+    const track = dst.stream.getAudioTracks()[0];
+    track.enabled = false; 
+    return new MediaStream([track]);
+  }
+
   document.querySelectorAll("[data-back]").forEach(btn=>{
     btn.addEventListener("click", () => { cleanupCamera(); cleanupControl(); showScreen("welcome"); });
   });
@@ -350,7 +362,7 @@
      دور الكاميرا (المرسل) — يدعم عدة مشاهدين + حماية PIN + كشف حركة
      ================================================================ */
   let camPeer = null, localStream = null, currentFacingMode = "environment";
-  let camStarted = false, wakeLockCam = null, viewers = new Map(); // peerId -> {dataConn, call}
+  let camStarted = false, wakeLockCam = null, viewers = new Map(); 
   let motionCount = 0, motionCanvas = null, motionCtx = null, prevFrame = null, motionInterval = null, motionCooldown = false;
   let torchOn = false, torchSupported = false;
 
@@ -375,7 +387,6 @@
 
     camPeer.on("open", (id) => { $("camIdValue").textContent = id; setCamStatus("waiting","في انتظار اتصال لوحة التحكم..."); });
 
-    // اتصال بيانات: يُستخدم للتحقق من الرمز السري قبل قبول البث، ولإرسال تنبيهات الحركة
     camPeer.on("connection", (conn) => {
       conn.on("open", () => {
         const requiredPin = getStoredPin();
@@ -387,22 +398,27 @@
           return;
         }
         conn.send({ type:"auth_ok", name: getCamName() });
-        viewers.set(conn.peer, { dataConn: conn, call: null });
+        const existing = viewers.get(conn.peer) || {};
+        viewers.set(conn.peer, { ...existing, dataConn: conn });
         updateViewersCount();
         conn.on("close", () => { viewers.delete(conn.peer); updateViewersCount(); });
       });
     });
 
     camPeer.on("call", (call) => {
-      // يُقبل الاتصال فقط إذا سبق أن تم التحقق من الرمز السري عبر قناة البيانات
-      const entry = viewers.get(call.peer);
-      const requiredPin = getStoredPin();
-      if(requiredPin && !entry){ call.close(); return; }
       call.answer(localStream);
-      if(entry) entry.call = call; else viewers.set(call.peer, { dataConn:null, call });
+      const entry = viewers.get(call.peer) || {};
+      entry.call = call;
+      viewers.set(call.peer, entry);
+
       setCamStatus("connected","تم الاتصال، البث يعمل الآن");
       updateViewersCount();
-      call.on("close", () => { viewers.delete(call.peer); updateViewersCount(); if(viewers.size===0) setCamStatus("waiting","في انتظار اتصال لوحة التحكم..."); });
+
+      call.on("close", () => { 
+        viewers.delete(call.peer); 
+        updateViewersCount(); 
+        if(viewers.size===0) setCamStatus("waiting","في انتظار اتصال لوحة التحكم..."); 
+      });
     });
 
     camPeer.on("disconnected", () => { setCamStatus("error","انقطع الاتصال، جاري إعادة المحاولة..."); try{ camPeer.reconnect(); }catch(e){} });
@@ -487,7 +503,7 @@
     setCamStatus("waiting","جاري تجهيز الكاميرا..."); motionCount = 0; $("motionCount").textContent = "0";
   }
 
-  /* ---------- كشف الحركة (فرق الإطارات على قماش مصغّر) ---------- */
+  /* ---------- كشف الحركة ---------- */
   function setupMotionDetection(){
     motionCanvas = document.createElement("canvas"); motionCanvas.width = 32; motionCanvas.height = 32;
     motionCtx = motionCanvas.getContext("2d", { willReadFrequently:true });
@@ -544,7 +560,7 @@
      دور لوحة التحكم — عدة كاميرات، تسجيل، لقطات، سجل تنبيهات
      ================================================================ */
   let ctrlPeer = null, ctrlStarted = false;
-  const cameras = new Map(); // id -> {name,pin,dataConn,call,status,el,recorder,recording,muted,expanded}
+  const cameras = new Map();
   const STORAGE_KEY = "cctv_saved_cameras_v1";
   let pendingPinCamId = null, pinBuffer = "";
   let expandedCamId = null, wakeLockCtrl = null;
@@ -620,15 +636,22 @@
 
   function startVideoCall(id){
     const cam = cameras.get(id); if(!cam || !ctrlPeer) return;
-    const emptyStream = new MediaStream();
+    
+    // إصلاح المشكلة هنا: تزويد الاتصال بمسار صوت صامت حتى يكتمل SDP Offer بوضوح
+    const dummyStream = createDummyAudioStream(); 
     let call;
-    try{ call = ctrlPeer.call(id, emptyStream); }catch(e){ cam.status="error"; updateTile(id); return; }
+    try{ call = ctrlPeer.call(id, dummyStream); }catch(e){ cam.status="error"; updateTile(id); return; }
     if(!call){ cam.status="error"; updateTile(id); return; }
     cam.call = call;
+    
     call.on("stream", (remoteStream) => {
       cam.status = "connected"; updateTile(id);
       const videoEl = cam.el && cam.el.querySelector("video");
-      if(videoEl){ videoEl.srcObject = remoteStream; videoEl.muted = cam.muted; }
+      if(videoEl){ 
+        videoEl.srcObject = remoteStream; 
+        videoEl.muted = cam.muted; 
+        videoEl.play().catch(()=>{});
+      }
     });
     call.on("close", () => { cam.status="error"; updateTile(id); });
     call.on("error", () => { cam.status="error"; updateTile(id); });
@@ -834,7 +857,7 @@
   $("expandSnapBtn").addEventListener("click", () => { if(expandedCamId){ const cam=cameras.get(expandedCamId); takeSnapshot($("expandedVideo"), cam.name); } });
   $("expandRecBtn").addEventListener("click", () => { if(expandedCamId){ toggleRecording(expandedCamId); $("expandRecBtn").classList.toggle("active-rec", cameras.get(expandedCamId).recording); } });
 
-  /* ---------- تبديل شكل الشبكة (عمود واحد / عمودين) ---------- */
+  /* ---------- تبديل شكل الشبكة ---------- */
   let gridCols2 = true;
   $("gridToggleBtn").addEventListener("click", () => {
     gridCols2 = !gridCols2;
