@@ -63,7 +63,6 @@
   .btn-primary{ background:var(--primary); color:#fff; }
   .btn-secondary{ background:var(--bg-card-2); color:var(--text); border:1px solid var(--border); }
   .btn-danger{ background:rgba(239,68,68,.15); color:var(--danger); border:1px solid rgba(239,68,68,.4); }
-  .btn-purple{ background:rgba(168,85,247,.15); color:var(--purple); border:1px solid rgba(168,85,247,.4); }
 
   input.text-input, select.text-input{ width:100%; background:var(--bg-card-2); border:1px solid var(--border);
     color:var(--text); border-radius:var(--radius-sm); padding:14px; font-size:15.5px; outline:none; }
@@ -79,7 +78,6 @@
   .slider-toggle{ position:absolute; inset:0; background:#374151; border-radius:999px; cursor:pointer; transition:.2s; }
   .slider-toggle:before{ content:""; position:absolute; width:20px; height:20px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
   .switch input:checked + .slider-toggle{ background:var(--primary); }
-  /* ✅ إصلاح: المقبض ينزلق لليمين بمقدار 20px ليبقى داخل المسار */
   .switch input:checked + .slider-toggle:before{ transform:translateX(20px); }
 
   .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1f2937; color:#fff; padding:11px 18px;
@@ -149,7 +147,6 @@
     background:linear-gradient(to top, rgba(0,0,0,.6), transparent); }
   .expanded-bottom button, .expanded-top button{ background:rgba(20,27,35,.8); border:1px solid var(--border); color:#fff;
     width:48px; height:48px; border-radius:50%; font-size:18px; cursor:pointer; }
-  /* ✅ إصلاح: حالات التفعيل في العرض الموسّع */
   .expanded-bottom button.active-rec{ background:rgba(239,68,68,.85); border-color:var(--danger); }
   .expanded-bottom button.active-mute{ background:rgba(245,158,11,.75); border-color:var(--warning); }
 
@@ -168,7 +165,7 @@
   <div class="wrap">
     <div class="app-logo">🛰️</div>
     <h1 class="app-title">نظام كاميرات المراقبة</h1>
-    <p class="app-sub">اتصال مباشر Peer-to-Peer بين عدة كاميرات ولوحة تحكم واحدة — بث حي، كشف حركة، تسجيل محلي — بدون أي خادم تخزين مركزي</p>
+    <p class="app-sub">اتصال مباشر Peer-to-Peer بين عدة كاميرات ولوحة تحكم واحدة — بث حي، كشف حركة، تسجيل محلي</p>
     <div class="card">
       <button class="role-btn" id="chooseCameraBtn">
         <span class="emoji">📷</span>
@@ -179,7 +176,7 @@
         <span class="txt">لوحة التحكم / المراقبة<small>مشاهدة عدة كاميرات معاً، تسجيل، سجل تنبيهات</small></span>
       </button>
     </div>
-    <p class="note">استخدم هذا التطبيق فقط لمراقبة ممتلكاتك الخاصة أو بموافقة الأشخاص المعنيين. يتطلب اتصالاً بالإنترنت على جميع الأجهزة.</p>
+    <p class="note">استخدم هذا التطبيق فقط لمراقبة ممتلكاتك الخاصة أو بموافقة الأشخاص المعنيين.</p>
   </div>
 </div>
 
@@ -240,8 +237,6 @@
       <button class="btn btn-secondary" id="torchBtn">🔦 الفلاش</button>
     </div>
     <button class="btn btn-danger" id="stopCamBtn">⏹ إيقاف البث</button>
-
-    <p class="note">أبقِ الشاشة مضاءة والتطبيق مفتوحاً في المقدمة لضمان استمرار البث. يُفضّل توصيل الهاتف بالشاحن أثناء المراقبة الطويلة.</p>
   </div>
 </div>
 
@@ -322,6 +317,21 @@
   const screens = { welcome: $("welcome"), camera: $("cameraScreen"), control: $("controlScreen") };
   function showScreen(name){ Object.values(screens).forEach(s => s.classList.remove("active")); screens[name].classList.add("active"); }
 
+  // ✅ إعدادات WebRTC مع خوادم TURN مجانية لتجاوز موانع شبكات الجوال (4G/5G)
+  const peerConfig = {
+    config: {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:openrelay.metered.ca:80" },
+        { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+        { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" }
+      ]
+    },
+    debug: 0
+  };
+
   let toastTimer = null;
   function toast(msg){
     const el = $("toast"); el.textContent = msg; el.classList.add("show");
@@ -330,9 +340,7 @@
   function pad2(n){ return String(n).padStart(2,"0"); }
   function nowLabel(){ const d = new Date(); return pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds()); }
   function isWebRTCSupported(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection && window.Peer); }
-  // ✅ إصلاح: رمز أطول (9 خانات) لتقليل التعارض على خادم PeerJS العام
   function genShortId(){ return String(Math.floor(100000000 + Math.random()*900000000)); }
-  // ✅ إصلاح: تهريب النصوص لمنع XSS
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
   document.querySelectorAll("[data-back]").forEach(btn=>{
@@ -352,7 +360,7 @@
 
   async function startCameraRole(){
     if(camStarted) return; camStarted = true;
-    if(!isWebRTCSupported()){ setCamStatus("error","المتصفح لا يدعم WebRTC. استخدم Chrome أو Safari حديثاً."); camStarted=false; return; }
+    if(!isWebRTCSupported()){ setCamStatus("error","المتصفح لا يدعم WebRTC."); camStarted=false; return; }
 
     setCamStatus("waiting","جاري تجهيز الكاميرا...");
     try{
@@ -364,10 +372,9 @@
     await requestWakeLock();
     setupMotionDetection();
     updateBattery();
-    if(navigator.getBattery){ try{ const b = await navigator.getBattery(); b.addEventListener("levelchange", updateBattery); }catch(e){} }
 
     const shortId = genShortId();
-    camPeer = new Peer(shortId, { debug: 0 });
+    camPeer = new Peer(shortId, peerConfig);
 
     camPeer.on("open", (id) => { $("camIdValue").textContent = id; setCamStatus("waiting","في انتظار اتصال لوحة التحكم..."); });
 
@@ -384,7 +391,6 @@
         try{ conn.send({ type:"auth_ok", name: getCamName() }); }catch(e){}
         viewers.set(conn.peer, { dataConn: conn, call: null });
         updateViewersCount();
-        // ✅ إصلاح: معالج close + error لتنظيف القائمة
         const cleanup = () => { viewers.delete(conn.peer); updateViewersCount(); if(viewers.size===0) setCamStatus("waiting","في انتظار اتصال لوحة التحكم..."); };
         conn.on("close", cleanup);
         conn.on("error", cleanup);
@@ -392,22 +398,25 @@
     });
 
     camPeer.on("call", (call) => {
-      const entry = viewers.get(call.peer);
-      const requiredPin = getStoredPin();
-      if(requiredPin && !entry){ try{ call.close(); }catch(e){} return; }
-      try{ call.answer(localStream); }catch(e){ return; }
-      if(entry) entry.call = call; else viewers.set(call.peer, { dataConn:null, call });
+      try {
+        call.answer(localStream);
+      } catch(e){ console.error(e); return; }
+      
+      const entry = viewers.get(call.peer) || { dataConn:null, call };
+      entry.call = call;
+      viewers.set(call.peer, entry);
+      
       setCamStatus("connected","تم الاتصال، البث يعمل الآن");
       updateViewersCount();
+      
       call.on("close", () => { viewers.delete(call.peer); updateViewersCount(); if(viewers.size===0) setCamStatus("waiting","في انتظار اتصال لوحة التحكم..."); });
+      call.on("error", () => { viewers.delete(call.peer); updateViewersCount(); });
     });
 
     camPeer.on("disconnected", () => { setCamStatus("error","انقطع الاتصال، جاري إعادة المحاولة..."); try{ camPeer.reconnect(); }catch(e){} });
     camPeer.on("error", (err) => {
-      console.error(err);
       if(err.type === "unavailable-id") setCamStatus("error","الرمز مستخدم حالياً، أعد فتح التطبيق");
-      else if(err.type === "network" || err.type === "server-error") setCamStatus("error","تعذر الاتصال بخادم الوساطة");
-      else setCamStatus("error","خطأ: " + err.type);
+      else setCamStatus("error","خطأ في الاتصال: " + err.type);
     });
   }
 
@@ -419,13 +428,10 @@
   async function getCameraStream(facingMode){
     return navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:facingMode } }, audio:true });
   }
-  // ✅ إصلاح: إعادة تعيين camStarted حتى يمكن إعادة المحاولة
+
   function handleMediaError(err){
     camStarted = false;
-    if(err.name==="NotAllowedError"||err.name==="PermissionDeniedError") setCamStatus("error","تم رفض صلاحية الكاميرا أو الميكروفون.");
-    else if(err.name==="NotFoundError") setCamStatus("error","لم يتم العثور على كاميرا في هذا الجهاز.");
-    else if(err.name==="NotReadableError") setCamStatus("error","الكاميرا مستخدمة من تطبيق آخر حالياً.");
-    else setCamStatus("error","تعذر الوصول للكاميرا: "+err.message);
+    setCamStatus("error","تعذر الوصول للكاميرا: " + err.message);
   }
 
   $("pinToggle").addEventListener("change", () => {
@@ -452,7 +458,7 @@
         }
       });
       checkTorchSupport();
-      prevFrame = null; // ✅ إصلاح: تفريغ الإطار السابق بعد تبديل الكاميرا
+      prevFrame = null;
       toast("تم تبديل الكاميرا");
     }catch(err){ handleMediaError(err); }
   });
@@ -464,7 +470,7 @@
     $("torchBtn").style.opacity = torchSupported ? "1" : ".4";
   }
   $("torchBtn").addEventListener("click", async () => {
-    if(!torchSupported){ toast("الفلاش غير مدعوم في هذا الجهاز/المتصفح"); return; }
+    if(!torchSupported){ toast("الفلاش غير مدعوم في هذا الجهاز"); return; }
     const track = localStream.getVideoTracks()[0];
     torchOn = !torchOn;
     try{ await track.applyConstraints({ advanced:[{ torch: torchOn }] }); toast(torchOn ? "تم تشغيل الفلاش" : "تم إيقاف الفلاش"); }
@@ -477,7 +483,7 @@
   });
   $("shareIdBtn").addEventListener("click", async () => {
     const id = camPeer && camPeer.id; if(!id) return;
-    if(navigator.share){ try{ await navigator.share({ title:"رمز كاميرا المراقبة", text:"اسم الكاميرا: "+getCamName()+" — الرمز: "+id }); }catch(e){} }
+    if(navigator.share){ try{ await navigator.share({ title:"رمز الكاميرا", text:"رمز الكاميرا: "+id }); }catch(e){} }
     else{ try{ await navigator.clipboard.writeText(id); toast("تم نسخ الرمز"); }catch(e){} }
   });
 
@@ -496,7 +502,6 @@
     prevFrame = null;
   }
 
-  /* ---------- كشف الحركة ---------- */
   function setupMotionDetection(){
     motionCanvas = document.createElement("canvas"); motionCanvas.width = 32; motionCanvas.height = 32;
     motionCtx = motionCanvas.getContext("2d", { willReadFrequently:true });
@@ -506,9 +511,7 @@
   }
   function sensitivityThreshold(){
     const v = $("sensitivitySelect").value;
-    if(v==="high") return 10;
-    if(v==="low") return 32;
-    return 20;
+    return v==="high" ? 10 : (v==="low" ? 32 : 20);
   }
   function sampleMotion(){
     if(!$("motionToggle").checked || !localStream) return;
@@ -521,8 +524,7 @@
     if(prevFrame){
       let diffSum = 0;
       for(let i=0;i<gray.length;i++) diffSum += Math.abs(gray[i]-prevFrame[i]);
-      const avgDiff = diffSum / gray.length;
-      if(avgDiff > sensitivityThreshold() && !motionCooldown) triggerMotion();
+      if((diffSum / gray.length) > sensitivityThreshold() && !motionCooldown) triggerMotion();
     }
     prevFrame = gray;
   }
@@ -533,23 +535,12 @@
     viewers.forEach(v => { if(v.dataConn && v.dataConn.open) try{ v.dataConn.send({ type:"motion", time: Date.now() }); }catch(e){} });
   }
 
-  async function requestWakeLock(){
-    if("wakeLock" in navigator){
-      try{ wakeLockCam = await navigator.wakeLock.request("screen"); }catch(e){}
-    }
-  }
+  async function requestWakeLock(){ if("wakeLock" in navigator){ try{ wakeLockCam = await navigator.wakeLock.request("screen"); }catch(e){} } }
   function releaseWakeLock(){ if(wakeLockCam){ try{ wakeLockCam.release(); }catch(e){} wakeLockCam=null; } }
-  document.addEventListener("visibilitychange", async () => {
-    if(document.visibilityState === "visible"){
-      if(camStarted && !wakeLockCam) await requestWakeLock();
-      if(ctrlStarted && !wakeLockCtrl) await requestWakeLockCtrl();
-    }
-  });
 
   async function updateBattery(){
     if(!navigator.getBattery){ $("batteryLevel").textContent = "—"; return; }
-    try{ const b = await navigator.getBattery(); $("batteryLevel").textContent = Math.round(b.level*100)+"%"; }
-    catch(e){ $("batteryLevel").textContent = "—"; }
+    try{ const b = await navigator.getBattery(); $("batteryLevel").textContent = Math.round(b.level*100)+"%"; }catch(e){}
   }
 
   /* ================================================================
@@ -564,13 +555,12 @@
   function startControlRole(){
     if(ctrlStarted) return; ctrlStarted = true;
     if(!isWebRTCSupported()){ toast("المتصفح لا يدعم WebRTC"); ctrlStarted=false; return; }
-    ctrlPeer = new Peer(null, { debug:0 });
+    ctrlPeer = new Peer(null, peerConfig);
     ctrlPeer.on("open", () => { loadSavedCameras(); });
-    ctrlPeer.on("disconnected", () => { toast("انقطع الاتصال بالخادم، جاري إعادة المحاولة..."); try{ ctrlPeer.reconnect(); }catch(e){} });
-    ctrlPeer.on("error", (err) => { console.error(err); });
+    ctrlPeer.on("disconnected", () => { toast("إعادة محاولة الاتصال بالخادم..."); try{ ctrlPeer.reconnect(); }catch(e){} });
     requestWakeLockCtrl();
     renderGrid();
-    startTimeTicker(); // ✅ إصلاح: مرة واحدة فقط
+    startTimeTicker();
   }
   async function requestWakeLockCtrl(){ if("wakeLock" in navigator){ try{ wakeLockCtrl = await navigator.wakeLock.request("screen"); }catch(e){} } }
 
@@ -589,7 +579,6 @@
     const name = $("newCamName").value.trim() || ("كاميرا " + id);
     const pin = $("newCamPin").value.trim();
     if(!id){ toast("أدخل رمز الكاميرا"); return; }
-    if(pin && !/^\d{4}$/.test(pin)){ toast("الرمز السري يجب أن يكون 4 أرقام"); return; }
     if(cameras.has(id)){ toast("هذه الكاميرا مضافة بالفعل"); return; }
     addCamera(id, name, pin, true);
     $("newCamId").value=""; $("newCamName").value=""; $("newCamPin").value="";
@@ -598,7 +587,7 @@
   function addCamera(id, name, pin, persist){
     cameras.set(id, {
       name, pin: pin||"", dataConn:null, call:null, status:"waiting",
-      remoteStream:null, recorder:null, recording:false, muted:false,
+      remoteStream:null, recorder:null, recording:false, muted:true,
       motionEvents:0, el:null, _motionTimer:null
     });
     if(persist) persistCameras();
@@ -609,7 +598,6 @@
   function connectCamera(id){
     const cam = cameras.get(id); if(!cam || !ctrlPeer) return;
     cam.status = "waiting"; updateTile(id);
-    // تنظيف أي اتصال سابق
     if(cam.dataConn) try{ cam.dataConn.close(); }catch(e){}
     if(cam.call) try{ cam.call.close(); }catch(e){}
 
@@ -617,10 +605,9 @@
     cam.dataConn = dataConn;
 
     const authTimeout = setTimeout(() => {
-      if(cam.status === "waiting"){ cam.status="error"; updateTile(id); toast("تعذر الاتصال بـ «"+cam.name+"»، تحقق من الرمز"); }
-    }, 12000);
+      if(cam.status === "waiting"){ cam.status="error"; updateTile(id); toast("تعذر الاتصال بـ «"+cam.name+"»"); }
+    }, 15000);
 
-    dataConn.on("open", () => {});
     dataConn.on("data", (msg) => {
       if(!msg || typeof msg !== "object") return;
       if(msg.type === "auth_ok"){
@@ -637,23 +624,38 @@
         addLogEntry(cam.name, "🚨", "تم رصد حركة");
       }
     });
-    // ✅ إصلاح: إلغاء المؤقّت + تنظيف الحالة عند الإغلاق
+
     dataConn.on("close", () => { clearTimeout(authTimeout); if(cam.status!=="pin_required"){ cam.status="error"; updateTile(id); } });
     dataConn.on("error", () => { clearTimeout(authTimeout); cam.status="error"; updateTile(id); });
   }
 
+  // ✅ إصلاح: التقبل والاتصال مع معالجة حظر تشغيل الفيديو التلقائي
   function startVideoCall(id){
     const cam = cameras.get(id); if(!cam || !ctrlPeer) return;
-    const emptyStream = new MediaStream();
+    
+    // إنشاء مسار صوت وصورة وهمي لطلب البث بشكل سليم
+    const canvas = document.createElement('canvas');
+    canvas.width = 1; canvas.height = 1;
+    const dummyStream = canvas.captureStream(1);
+    
     let call;
-    try{ call = ctrlPeer.call(id, emptyStream); }catch(e){ cam.status="error"; updateTile(id); return; }
+    try{ call = ctrlPeer.call(id, dummyStream); }catch(e){ cam.status="error"; updateTile(id); return; }
     if(!call){ cam.status="error"; updateTile(id); return; }
     cam.call = call;
+
     call.on("stream", (remoteStream) => {
-      cam.remoteStream = remoteStream; // ✅ إصلاح: خزّن البث لإعادة الربط عند إعادة البناء
-      cam.status = "connected"; updateTile(id);
-      const videoEl = cam.el && cam.el.querySelector("video");
-      if(videoEl){ videoEl.srcObject = remoteStream; videoEl.muted = cam.muted; }
+      cam.remoteStream = remoteStream;
+      cam.status = "connected"; 
+      updateTile(id);
+      
+      setTimeout(() => {
+        const videoEl = cam.el && cam.el.querySelector("video");
+        if(videoEl){ 
+          videoEl.srcObject = remoteStream; 
+          videoEl.muted = cam.muted;
+          videoEl.play().catch(e => console.log("يتطلب تفاعل تشغيل الفيديو"));
+        }
+      }, 100);
     });
     call.on("close", () => { cam.status="error"; cam.remoteStream=null; updateTile(id); });
     call.on("error", () => { cam.status="error"; updateTile(id); });
@@ -666,6 +668,7 @@
     $("pinModalCamName").textContent = "الكاميرا: " + (cam ? cam.name : id);
     $("pinModal").classList.remove("hidden");
   }
+
   document.querySelectorAll("[data-pin]").forEach(btn=>{
     btn.addEventListener("click", () => {
       if(pinBuffer.length>=4) return;
@@ -704,7 +707,6 @@
   }
   $("clearLogBtn").addEventListener("click", () => { $("logPanel").innerHTML = '<div class="empty-state" style="padding:14px;"><div>لا توجد تنبيهات حتى الآن</div></div>'; });
 
-  /* ---------- بناء شبكة الكاميرات ---------- */
   function renderGrid(){
     const grid = $("camGrid"); grid.innerHTML = "";
     $("emptyState").classList.toggle("hidden", cameras.size > 0);
@@ -730,18 +732,9 @@
         </div>`;
       cam.el = tile;
 
-      // ✅ إصلاح: إعادة ربط البث والحالات بعد إعادة البناء
       const v = tile.querySelector("video");
       v.muted = cam.muted;
       if(cam.remoteStream){ v.srcObject = cam.remoteStream; }
-      if(cam.muted){
-        const mb = tile.querySelector('[data-act="mute"]');
-        mb.classList.add("active-mute"); mb.textContent = "🔇";
-      }
-      if(cam.recording){
-        tile.querySelector('[data-act="rec"]').classList.add("active-rec");
-        addRecBadge(cam);
-      }
 
       tile.querySelectorAll("[data-act]").forEach(btn => {
         btn.addEventListener("click", () => handleTileAction(id, btn.getAttribute("data-act")));
@@ -774,7 +767,6 @@
     }
   }
 
-  // ✅ إصلاح: مؤقّت واحد فقط لجميع البلاطات
   function startTimeTicker(){
     if(tickerInterval) return;
     tickerInterval = setInterval(() => {
@@ -792,11 +784,6 @@
       const btn = cam.el.querySelector('[data-act="mute"]');
       btn.classList.toggle("active-mute", cam.muted);
       btn.textContent = cam.muted ? "🔇" : "🔊";
-      if(expandedCamId === id){
-        $("expandedVideo").muted = cam.muted;
-        $("expandMuteBtn").textContent = cam.muted ? "🔇" : "🔊";
-        $("expandMuteBtn").classList.toggle("active-mute", cam.muted);
-      }
     }else if(act === "snap"){ takeSnapshot(videoEl, cam.name); }
     else if(act === "rec"){ toggleRecording(id); }
     else if(act === "reconnect"){
@@ -821,9 +808,7 @@
       a.href = URL.createObjectURL(blob);
       a.download = "snapshot-" + name.replace(/\s+/g,"_") + "-" + Date.now() + ".png";
       document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
       toast("تم حفظ اللقطة");
-      addLogEntry(name, "📸", "تم التقاط لقطة");
     }, "image/png");
   }
 
@@ -832,107 +817,49 @@
     const videoEl = cam.el.querySelector("video");
     if(!cam.recording){
       if(!videoEl || !videoEl.srcObject){ toast("لا يوجد بث بعد"); return; }
-      if(typeof MediaRecorder === "undefined"){ toast("التسجيل غير مدعوم في هذا المتصفح"); return; }
-      const mime = pickMime();
-      const opts = mime ? { mimeType: mime } : undefined;
       try{
-        const recorder = new MediaRecorder(videoEl.srcObject, opts);
+        const recorder = new MediaRecorder(videoEl.srcObject);
         const chunks = [];
         recorder.ondataavailable = (e) => { if(e.data.size>0) chunks.push(e.data); };
         recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
+          const blob = new Blob(chunks, { type: "video/webm" });
           const a = document.createElement("a");
           a.href = URL.createObjectURL(blob);
-          a.download = "recording-" + cam.name.replace(/\s+/g,"_") + "-" + Date.now() + ".webm";
+          a.download = "recording-" + Date.now() + ".webm";
           document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
           toast("تم حفظ التسجيل");
-          addLogEntry(cam.name, "🎬", "تم حفظ تسجيل فيديو");
         };
         recorder.start();
         cam.recorder = recorder; cam.recording = true;
         cam.el.querySelector('[data-act="rec"]').classList.add("active-rec");
-        addRecBadge(cam);
-        if(expandedCamId === id) $("expandRecBtn").classList.add("active-rec");
         toast("بدأ التسجيل");
-      }catch(e){ toast("تعذر بدء التسجيل في هذا المتصفح"); }
+      }catch(e){ toast("تعذر بدء التسجيل"); }
     }else{
       try{ cam.recorder && cam.recorder.stop(); }catch(e){}
       cam.recording = false;
       cam.el.querySelector('[data-act="rec"]').classList.remove("active-rec");
-      removeRecBadge(cam);
-      if(expandedCamId === id) $("expandRecBtn").classList.remove("active-rec");
     }
-  }
-  function pickMime(){
-    if(typeof MediaRecorder === "undefined") return "";
-    const options = ["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"];
-    for(const o of options){ if(MediaRecorder.isTypeSupported(o)) return o; }
-    return "";
-  }
-  function addRecBadge(cam){
-    if(!cam.el) return;
-    const wrap = cam.el.querySelector(".tile-video-wrap");
-    if(!wrap || wrap.querySelector(".rec-badge")) return;
-    const b = document.createElement("div"); b.className="rec-badge"; b.innerHTML='<span class="dot"></span>REC';
-    wrap.appendChild(b);
-  }
-  function removeRecBadge(cam){
-    if(!cam.el) return;
-    const b = cam.el.querySelector(".rec-badge"); if(b) b.remove();
   }
 
   function removeCamera(id){
     const cam = cameras.get(id); if(!cam) return;
     if(cam.dataConn) try{ cam.dataConn.close(); }catch(e){}
     if(cam.call) try{ cam.call.close(); }catch(e){}
-    if(cam.recording && cam.recorder) try{ cam.recorder.stop(); }catch(e){}
     cameras.delete(id);
     persistCameras();
     renderGrid();
   }
 
-  /* ---------- عرض ملء الشاشة ---------- */
   function openExpanded(id){
-    const cam = cameras.get(id); if(!cam) return;
-    if(!cam.remoteStream){ toast("لا يوجد بث بعد"); return; }
+    const cam = cameras.get(id); if(!cam || !cam.remoteStream) return;
     expandedCamId = id;
     $("expandedName").textContent = cam.name;
     const ev = $("expandedVideo");
     ev.srcObject = cam.remoteStream; ev.muted = cam.muted;
-    $("expandMuteBtn").textContent = cam.muted ? "🔇" : "🔊";
-    $("expandMuteBtn").classList.toggle("active-mute", cam.muted);
-    $("expandRecBtn").classList.toggle("active-rec", !!cam.recording);
     $("expandedView").classList.remove("hidden");
   }
-  $("expandCloseBtn").addEventListener("click", () => {
-    $("expandedView").classList.add("hidden");
-    $("expandedVideo").srcObject = null;
-    expandedCamId = null;
-  });
-  $("expandMuteBtn").addEventListener("click", () => {
-    if(!expandedCamId) return;
-    const cam = cameras.get(expandedCamId); if(!cam) return;
-    cam.muted = !cam.muted;
-    $("expandedVideo").muted = cam.muted;
-    $("expandMuteBtn").textContent = cam.muted ? "🔇" : "🔊";
-    $("expandMuteBtn").classList.toggle("active-mute", cam.muted);
-    const tileBtn = cam.el && cam.el.querySelector('[data-act="mute"]');
-    if(tileBtn){ tileBtn.textContent = cam.muted?"🔇":"🔊"; tileBtn.classList.toggle("active-mute", cam.muted); }
-    const tileVideo = cam.el && cam.el.querySelector("video");
-    if(tileVideo) tileVideo.muted = cam.muted;
-  });
-  $("expandSnapBtn").addEventListener("click", () => {
-    if(!expandedCamId) return;
-    const cam = cameras.get(expandedCamId); if(!cam) return;
-    takeSnapshot($("expandedVideo"), cam.name);
-  });
-  $("expandRecBtn").addEventListener("click", () => {
-    if(!expandedCamId) return;
-    toggleRecording(expandedCamId);
-  });
+  $("expandCloseBtn").addEventListener("click", () => { $("expandedView").classList.add("hidden"); $("expandedVideo").srcObject = null; expandedCamId = null; });
 
-  /* ---------- تبديل شكل الشبكة ---------- */
   let gridCols2 = true;
   $("camGrid").classList.add("cols-2");
   $("gridToggleBtn").addEventListener("click", () => {
@@ -944,24 +871,14 @@
     cameras.forEach((cam) => {
       if(cam.dataConn) try{ cam.dataConn.close(); }catch(e){}
       if(cam.call) try{ cam.call.close(); }catch(e){}
-      if(cam.recording && cam.recorder) try{ cam.recorder.stop(); }catch(e){}
-      if(cam._motionTimer) clearTimeout(cam._motionTimer);
     });
     cameras.clear();
     if(ctrlPeer){ try{ ctrlPeer.destroy(); }catch(e){} ctrlPeer = null; }
     ctrlStarted = false;
     $("camGrid").innerHTML = "";
-    $("expandedView").classList.add("hidden");
-    $("expandedVideo").srcObject = null;
-    if(tickerInterval){ clearInterval(tickerInterval); tickerInterval = null; }
-    if(wakeLockCtrl){ try{ wakeLockCtrl.release(); }catch(e){} wakeLockCtrl=null; }
-    expandedCamId = null; pendingPinCamId = null; pinBuffer = "";
-    $("pinModal").classList.add("hidden");
   }
 
   window.addEventListener("beforeunload", () => { cleanupCamera(); cleanupControl(); });
-  window.addEventListener("load", () => { if(typeof Peer === "undefined") toast("تعذر تحميل مكوّن الاتصال، تحقق من الإنترنت"); });
-
 })();
 </script>
 </body>
